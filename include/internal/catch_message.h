@@ -64,9 +64,12 @@ namespace Catch {
     class ScopedMessage {
     public:
         explicit ScopedMessage( MessageBuilder const& builder );
+        ScopedMessage( ScopedMessage& duplicate ) = delete;
+        ScopedMessage( ScopedMessage&& old );
         ~ScopedMessage();
 
         MessageInfo m_info;
+        bool m_moved;
     };
 
     class Capturer {
@@ -77,16 +80,16 @@ namespace Catch {
         Capturer( StringRef macroName, SourceLineInfo const& lineInfo, ResultWas::OfType resultType, StringRef names );
         ~Capturer();
 
-        void captureValue( size_t index, StringRef value );
+        void captureValue( size_t index, std::string const& value );
 
         template<typename T>
-        void captureValues( size_t index, T&& value ) {
+        void captureValues( size_t index, T const& value ) {
             captureValue( index, Catch::Detail::stringify( value ) );
         }
 
         template<typename T, typename... Ts>
-        void captureValues( size_t index, T&& value, Ts&&... values ) {
-            captureValues( index, value );
+        void captureValues( size_t index, T const& value, Ts const&... values ) {
+            captureValue( index, Catch::Detail::stringify(value) );
             captureValues( index+1, values... );
         }
     };

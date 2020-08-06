@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from __future__ import print_function
 
@@ -18,7 +18,7 @@ if os.name == 'nt':
 
 rootPath = os.path.join(catchPath, 'projects/SelfTest/Baselines')
 
-
+langFilenameParser = re.compile(r'(.+\.[ch]pp)')
 filelocParser = re.compile(r'''
     .*/
     (.+\.[ch]pp)  # filename
@@ -29,6 +29,7 @@ filelocParser = re.compile(r'''
 lineNumberParser = re.compile(r' line="[0-9]*"')
 hexParser = re.compile(r'\b(0[xX][0-9a-fA-F]+)\b')
 durationsParser = re.compile(r' time="[0-9]*\.[0-9]*"')
+sonarqubeDurationParser = re.compile(r' duration="[0-9]+"')
 timestampsParser = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}\:\d{2}\:\d{2}Z')
 versionParser = re.compile(r'Catch v[0-9]+\.[0-9]+\.[0-9]+(-develop\.[0-9]+)?')
 nullParser = re.compile(r'\b(__null|nullptr)\b')
@@ -91,12 +92,24 @@ def diffFiles(fileA, fileB):
     return [line for line in diff if line[0] in ('+', '-')]
 
 
-def filterLine(line, isCompact):
+def normalizeFilepath(line):
     if catchPath in line:
         # make paths relative to Catch root
         line = line.replace(catchPath + os.sep, '')
+
+    m = langFilenameParser.match(line)
+    if m:
+        filepath = m.group(0)
         # go from \ in windows paths to /
-        line = line.replace('\\', '/')
+        filepath = filepath.replace('\\', '/')
+        # remove start of relative path
+        filepath = filepath.replace('../', '')
+        line = line[:m.start()] + filepath + line[m.end():]
+
+    return line
+
+def filterLine(line, isCompact):
+    line = normalizeFilepath(line)
 
     # strip source line numbers
     m = filelocParser.match(line)
@@ -126,6 +139,7 @@ def filterLine(line, isCompact):
 
     # strip durations and timestamps
     line = durationsParser.sub(' time="{duration}"', line)
+    line = sonarqubeDurationParser.sub(' duration="{duration}"', line)
     line = timestampsParser.sub('{iso8601-timestamp}', line)
     line = specialCaseParser.sub('file:\g<1>', line)
     line = errnoParser.sub('errno', line)
@@ -192,6 +206,8 @@ approve("junit.sw", ["~[!nonportable]~[!benchmark]~[approvals]", "-s", "-w", "No
 approve("xml.sw", ["~[!nonportable]~[!benchmark]~[approvals]", "-s", "-w", "NoAssertions", "-r", "xml", "--order", "lex", "--rng-seed", "1"])
 # compact reporter, include passes, warn about No Assertions
 approve('compact.sw', ['~[!nonportable]~[!benchmark]~[approvals]', '-s', '-w', 'NoAssertions', '-r', 'compact', '--order', 'lex', "--rng-seed", "1"])
+# sonarqube reporter, include passes, warn about No Assertions
+approve("sonarqube.sw", ["~[!nonportable]~[!benchmark]~[approvals]", "-s", "-w", "NoAssertions", "-r", "sonarqube", "--order", "lex", "--rng-seed", "1"])
 
 if overallResult != 0:
     print("If these differences are expected, run approve.py to approve new baselines.")
